@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Smart Dispatch - ระบบจำแนกปัญหาและส่งต่อคณะวิชาด้วย AI</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Sarabun & Kanit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#16a34a',
+                            600: '#15803d',
+                            700: '#166534',
+                        },
+                        elderly: {
+                            bg: '#f8fafc',
+                            card: '#ffffff',
+                            text: '#0f172a',
+                            accent: '#1e40af',
+                            highlight: '#f59e0b'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Sarabun', 'Kanit', 'sans-serif'],
+                        heading: ['Kanit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f1f5f9;
+            transition: all 0.3s ease;
+        }
+
+        /* Large Font Mode for Elderly */
+        body.text-large {
+            font-size: 1.25rem;
+        }
+        body.text-large h1 { font-size: 2.25rem !important; }
+        body.text-large h2 { font-size: 1.875rem !important; }
+        body.text-large h3 { font-size: 1.5rem !important; }
+        body.text-large button { font-size: 1.25rem !important; }
+
+        /* High Contrast Mode for Visual Impairment */
+        body.high-contrast {
+            background-color: #000000 !important;
+            color: #ffff00 !important;
+        }
+        body.high-contrast .bg-white,
+        body.high-contrast .bg-slate-50,
+        body.high-contrast .bg-slate-100 {
+            background-color: #121212 !important;
+            color: #ffffff !important;
+            border-color: #ffff00 !important;
+        }
+        body.high-contrast .text-slate-600,
+        body.high-contrast .text-slate-500,
+        body.high-contrast .text-slate-700,
+        body.high-contrast .text-slate-800 {
+            color: #ffffff !important;
+        }
+        body.high-contrast button {
+            border: 2px solid #ffff00 !important;
+        }
+
+        .pulse-recording {
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-800 antialiased">
+
+    <header class="bg-indigo-900 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                <!-- Title & Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 bg-amber-400 text-indigo-950 rounded-2xl flex items-center justify-center font-bold text-2xl shadow-inner">
+                        <i class="fa-solid fa-brain"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl sm:text-2xl font-bold font-heading leading-tight">AI จำแนกเรื่องร้องเรียนชุมชน</h1>
+                        <p class="text-xs sm:text-sm text-indigo-200">ช่วยผู้สูงอายุส่งเรื่องตรงถึงคณะ/หน่วยงานที่รับผิดชอบ</p>
+                    </div>
+                </div>
+
+                <!-- Accessibility Controls (Senior Friendly) -->
+                <div class="flex items-center space-x-2 bg-indigo-950/60 p-2 rounded-2xl border border-indigo-700/50">
+                    <span class="text-xs font-semibold px-2 text-indigo-200 hidden sm:inline"><i class="fa-solid fa-universal-access mr-1"></i> ปรับการมองเห็น:</span>
+                    <button id="toggleTextSize" onclick="toggleTextSize()" class="px-3 py-1.5 bg-indigo-800 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-sm font-semibold transition flex items-center gap-1" title="ขยายตัวหนังสือ">
+                        <i class="fa-solid fa-text-height"></i>
+                        <span id="textSizeLabel">ขยายตัวหนังสือ</span>
+                    </button>
+                    <button id="toggleContrast" onclick="toggleContrast()" class="px-3 py-1.5 bg-indigo-800 hover:bg-indigo-700 active:scale-95 text-amber-300 rounded-xl text-sm font-semibold transition flex items-center gap-1" title="โหมดความคมชัดสูง">
+                        <i class="fa-solid fa-circle-half-stroke"></i>
+                        <span>ตัดสีเข้ม</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 sm:px-6 lg:px-8">
+
+        <!-- Navigation Tabs -->
+        <div class="flex flex-wrap border-b border-slate-300 mb-6 gap-2">
+            <button onclick="switchTab('report')" id="tab-report" class="tab-btn active px-6 py-3 font-semibold text-lg border-b-4 border-indigo-600 text-indigo-700 bg-white rounded-t-2xl shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-pen-to-square"></i> แจ้งปัญหา (AI ช่วยจำแนก)
+            </button>
+            <button onclick="switchTab('cases')" id="tab-cases" class="tab-btn px-6 py-3 font-semibold text-lg border-b-4 border-transparent text-slate-600 hover:text-indigo-600 rounded-t-2xl flex items-center gap-2">
+                <i class="fa-solid fa-list-check"></i> รายการเรื่องร้องเรียน (<span id="caseCountBadge">3</span>)
+            </button>
+            <button onclick="switchTab('admin')" id="tab-admin" class="tab-btn px-6 py-3 font-semibold text-lg border-b-4 border-transparent text-slate-600 hover:text-indigo-600 rounded-t-2xl flex items-center gap-2">
+                <i class="fa-solid fa-building-user"></i> สำหรับเจ้าหน้าที่คณะ
+            </button>
+        </div>
+
+        <!-- SECTION 1: REPORT ISSUE WITH AI (MAIN FEATURE) -->
+        <div id="section-report" class="space-y-6">
+            
+            <!-- Guidance Header for Senior Citizens -->
+            <div class="bg-amber-50 border-2 border-amber-300 rounded-3xl p-5 shadow-sm flex items-start gap-4">
+                <div class="w-12 h-12 bg-amber-500 text-white rounded-2xl flex-shrink-0 flex items-center justify-center text-2xl shadow">
+                    <i class="fa-solid fa-hands-holding-child"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold font-heading text-amber-900">ไม่ต้องกังวลว่าจะเลือกคณะหรือหน่วยงานผิด!</h2>
+                    <p class="text-amber-800 mt-1 leading-relaxed">
+                        ท่านเพียงพิมพ์บอกความเดือดร้อน, พูอดใส่ไมค์ หรือถ่ายรูปปัญหามาให้เรา **ระบบปัญญาประดิษฐ์ (AI) จะช่วยวิเคราะห์และส่งเรื่องไปยังคณะวิชาที่รับผิดชอบให้โดยอัตโนมัติ**
+                    </p>
+                </div>
+            </div>
+
+            <!-- Input Form Card -->
+            <div class="bg-white rounded-3xl shadow-md border border-slate-200 p-6 sm:p-8">
+                
+                <form id="issueForm" onsubmit="handleAnalyzeIssue(event)" class="space-y-6">
+                    
+                    <!-- Quick Example Buttons -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-500 mb-2">
+                            <i class="fa-solid fa-lightbulb text-amber-500 mr-1"></i> ตัวอย่างปัญหาสำหรับทดสอบกดลอง (คลิกเพื่อเลือก):
+                        </label>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" onclick="setExampleText('ท่อน้ำประปาใหญ่หน้าบ้านแตก น้ำไหลท่วมถนนเข้าบ้าน ตาเดินลำบากกลัวล้ม')" class="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 border border-slate-300 hover:border-indigo-300 rounded-xl text-sm text-slate-700 transition">
+                                💧 ท่อน้ำแตกท่วมถนน (วิศวกรรมศาสตร์)
+                            </button>
+                            <button type="button" onclick="setExampleText('ข้าวในไร่ใบเหลืองแห้งเป็นจุดสีดำ ปลูกเท่าไหร่ก็ตายอยากให้ผู้เชี่ยวชาญมาตรวจดินและพืช')" class="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 border border-slate-300 hover:border-indigo-300 rounded-xl text-sm text-slate-700 transition">
+                                🌾 ข้าวใบเหลืองพืชตาย (เกษตรศาสตร์)
+                            </button>
+                            <button type="button" onclick="setExampleText('คุณตาอายุ 85 ปี มีแผลที่เท้าเรื้อรังจากเบาหวาน ปวดหัวบ่อย อยากให้มีทีมหมอหรือพยาบาลมาเยี่ยมบ้าน')" class="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 border border-slate-300 hover:border-indigo-300 rounded-xl text-sm text-slate-700 transition">
+                                🩺 แผลเบาหวานเรื้อรัง (พยาบาล/สาธารณสุข)
+                            </button>
+                            <button type="button" onclick="setExampleText('ที่ดินโดนข้างบ้านล้อมรั้วรุกรานเข้ามา อยากขอคำปรึกษาข้อกฎหมายแต่ไม่มีเงินจ้างทนาย')" class="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 border border-slate-300 hover:border-indigo-300 rounded-xl text-sm text-slate-700 transition">
+                                ⚖️ ข้อพิพาทที่ดิน (นิติศาสตร์)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Problem Description Input with Voice -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="problemDescription" class="text-xl font-bold font-heading text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-comment-dots text-indigo-600"></i> อธิบายความเดือดร้อนหรือปัญหาของท่าน
+                            </label>
+                            
+                            <!-- Voice Input Button -->
+                            <button type="button" id="voiceBtn" onclick="toggleVoiceRecognition()" class="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-2xl font-bold flex items-center gap-2 transition shadow-sm border border-rose-300">
+                                <i class="fa-solid fa-microphone text-lg"></i>
+                                <span id="voiceBtnText">กดเพื่อพูด (เสียง)</span>
+                            </button>
+                        </div>
+
+                        <textarea id="problemDescription" rows="4" required class="w-full p-4 border-2 border-slate-300 rounded-2xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200 text-lg sm:text-xl leading-relaxed resize-y" placeholder="ตัวอย่าง: ปวดขาข้างซ้าย เดินไม่ได้มา 2 วันแล้ว อยากให้มีเจ้าหน้าที่มาดูอาการที่บ้าน..."></textarea>
+                    </div>
+
+                    <!-- Additional Details: Location & Photo -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="reporterLocation" class="block font-bold text-slate-700 mb-2 text-lg">
+                                <i class="fa-solid fa-location-dot text-rose-500"></i> สถานที่เกิดเหตุ / ที่อยู่
+                            </label>
+                            <input type="text" id="reporterLocation" class="w-full p-3 border-2 border-slate-300 rounded-2xl text-lg" placeholder="เช่น หมู่ 4 ต.ในเมือง อ.เมือง" value="หมู่ 3 ต.ในเมือง">
+                        </div>
+
+                        <div>
+                            <label for="reporterPhone" class="block font-bold text-slate-700 mb-2 text-lg">
+                                <i class="fa-solid fa-phone text-emerald-600"></i> เบอร์โทรศัพท์ติดต่อกลับ
+                            </label>
+                            <input type="tel" id="reporterPhone" class="w-full p-3 border-2 border-slate-300 rounded-2xl text-lg" placeholder="เช่น 081-234-5678" value="089-123-4567">
+                        </div>
+                    </div>
+
+                    <!-- Photo Attachment -->
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-2 text-lg">
+                            <i class="fa-solid fa-camera text-indigo-600"></i> แนบรูปภาพปัญหา (ถ้ามี)
+                        </label>
+                        <div class="flex flex-col sm:flex-row items-center gap-4 border-2 border-dashed border-slate-300 p-4 rounded-2xl bg-slate-50">
+                            <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)" class="hidden">
+                            <button type="button" onclick="document.getElementById('imageInput').click()" class="w-full sm:w-auto px-5 py-3 bg-white border border-slate-300 rounded-xl shadow-sm text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-image text-indigo-600"></i> เลือกรูปภาพหรือถ่ายรูป
+                            </button>
+                            <div id="imagePreviewContainer" class="hidden flex items-center gap-3">
+                                <img id="imagePreview" class="h-20 w-20 object-cover rounded-xl border border-slate-300 shadow">
+                                <button type="button" onclick="removeImage()" class="text-rose-600 hover:text-rose-800 font-semibold text-sm">
+                                    <i class="fa-solid fa-trash mr-1"></i> ลบรูป
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <div class="pt-2">
+                        <button type="submit" id="submitBtn" class="w-full py-5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xl font-bold font-heading rounded-2xl shadow-lg transition flex items-center justify-center gap-3">
+                            <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-2xl"></i>
+                            <span>ให้ AI วิเคราะห์เลือกคณะให้ฉัน</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- AI Classification Result Modal Container -->
+            <div id="analysisResult" class="hidden bg-white rounded-3xl shadow-xl border-2 border-indigo-500 overflow-hidden transition-all duration-300">
+                <div class="bg-indigo-600 text-white p-6 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-amber-400 text-indigo-950 rounded-xl flex items-center justify-center font-bold text-xl">
+                            <i class="fa-solid fa-robot"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold font-heading">ผลการวิเคราะห์จำแนกปัญหาโดย AI</h3>
+                            <p class="text-indigo-100 text-sm">ระบบได้คัดเลือกคณะที่ตรงกับประเภทปัญหาของท่านที่สุด</p>
+                        </div>
+                    </div>
+                    <button onclick="speakAIResult()" class="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-indigo-950 rounded-xl font-bold text-sm flex items-center gap-2 shadow">
+                        <i class="fa-solid fa-volume-high"></i> ฟังเสียงอ่าน
+                    </button>
+                </div>
+
+                <div class="p-6 sm:p-8 space-y-6">
+                    
+                    <!-- Primary Assigned Faculty Highlight Card -->
+                    <div class="bg-emerald-50 border-2 border-emerald-400 rounded-3xl p-6 relative overflow-hidden">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <span class="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full uppercase tracking-wider">หน่วยงานรับผิดชอบหลักที่ AI แนะนำ</span>
+                                <h4 id="resultFaculty" class="text-3xl font-extrabold text-emerald-950 mt-2 font-heading">
+                                    คณะวิศวกรรมศาสตร์
+                                </h4>
+                                <p id="resultDepartment" class="text-lg font-semibold text-emerald-800 mt-1">
+                                    สาขาวิชาวิศวกรรมโยธาและสิ่งแวดล้อม
+                                </p>
+                            </div>
+                            <div class="flex flex-col items-start md:items-end">
+                                <span class="text-sm font-semibold text-slate-500">ระดับความเร่งด่วน</span>
+                                <span id="resultUrgency" class="px-4 py-1.5 bg-rose-500 text-white font-bold rounded-2xl text-lg mt-1 inline-block shadow-sm">
+                                    🔴 ด่วนมาก
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- AI Explanation for Elderly -->
+                        <div class="mt-4 pt-4 border-t border-emerald-200">
+                            <h5 class="font-bold text-emerald-900 mb-1 flex items-center gap-1.5">
+                                <i class="fa-solid fa-circle-info text-emerald-600"></i> เหตุผลที่ AI เลือกคณะนี้ให้ท่าน:
+                            </h5>
+                            <p id="resultReasoning" class="text-emerald-900 text-lg leading-relaxed bg-white/70 p-4 rounded-2xl border border-emerald-200">
+                                เนื่องจากปัญหาเกี่ยวกับท่อน้ำแตก น้ำไหลท่วมถนน ต้องใช้ความเชี่ยวชาญด้านวิศวกรรมโยธาและเครื่องจักรกลในการเข้าซ่อมแซมโครงสร้างพื้นฐาน
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Faculty & Summary -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                            <h5 class="font-bold text-slate-700 text-sm mb-1">คณะ/หน่วยงานร่วมสนับสนุน (ถ้ามี)</h5>
+                            <p id="resultSecondary" class="text-lg font-semibold text-slate-900">สำนักบริการวิชาการแก่สังคม</p>
+                        </div>
+                        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                            <h5 class="font-bold text-slate-700 text-sm mb-1">สรุปสาระสำคัญของปัญหา</h5>
+                            <p id="resultSummary" class="text-base text-slate-800">ท่อน้ำประปาใหญ่หน้าบ้านแตก ส่งผลให้น้ำท่วมขังบนถนนและสร้างความเดือดร้อนแก่ผู้สูงอายุ</p>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons for Citizen -->
+                    <div class="flex flex-col sm:flex-row gap-4 pt-4 border-t border-slate-200">
+                        <button onclick="confirmDispatch()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xl font-bold font-heading rounded-2xl shadow-lg transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-paper-plane"></i> ยืนยันส่งเรื่องไปยังคณะนี้
+                        </button>
+                        <button onclick="showManualOverride()" class="py-4 px-6 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-2xl transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-sliders"></i> ขอเปลี่ยนเป็นคณะอื่น
+                        </button>
+                    </div>
+
+                    <!-- Manual Override Selector (Hidden by Default) -->
+                    <div id="overrideSection" class="hidden bg-amber-50 p-5 rounded-2xl border border-amber-300 mt-4">
+                        <label for="overrideFacultySelect" class="block font-bold text-amber-900 mb-2">
+                            เลือกระบุคณะด้วยตนเอง (หากท่านมั่นใจ):
+                        </label>
+                        <div class="flex gap-2">
+                            <select id="overrideFacultySelect" class="flex-grow p-3 border border-amber-400 rounded-xl text-lg bg-white">
+                                <option value="คณะวิศวกรรมศาสตร์">คณะวิศวกรรมศาสตร์</option>
+                                <option value="คณะเกษตรศาสตร์">คณะเกษตรศาสตร์</option>
+                                <option value="คณะพยาบาลศาสตร์">คณะพยาบาลศาสตร์</option>
+                                <option value="คณะสาธารณสุขศาสตร์">คณะสาธารณสุขศาสตร์</option>
+                                <option value="คณะนิติศาสตร์">คณะนิติศาสตร์</option>
+                                <option value="คณะวิทยาศาสตร์">คณะวิทยาศาสตร์</option>
+                                <option value="คณะเทคโนโลยีสารสนเทศ">คณะเทคโนโลยีสารสนเทศ</option>
+                                <option value="คณะมนุษยศาสตร์และสังคมศาสตร์">คณะมนุษยศาสตร์และสังคมศาสตร์</option>
+                            </select>
+                            <button onclick="applyManualOverride()" class="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
+                                ตกลงเปลี่ยน
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SECTION 2: TRACK CASES -->
+        <div id="section-cases" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-200">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold font-heading text-slate-800">รายการเรื่องร้องเรียนและการส่งต่อคณะ</h2>
+                        <p class="text-slate-500">ติดตามสถานะการรับเรื่องและการลงพื้นที่ของคณะวิชาต่างๆ</p>
+                    </div>
+                    
+                    <!-- Search & Filter -->
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <select id="filterFaculty" onchange="renderCaseList()" class="p-2.5 border border-slate-300 rounded-xl text-sm font-semibold bg-slate-50">
+                            <option value="ALL">แสดงทุกคณะ</option>
+                            <option value="คณะวิศวกรรมศาสตร์">คณะวิศวกรรมศาสตร์</option>
+                            <option value="คณะเกษตรศาสตร์">คณะเกษตรศาสตร์</option>
+                            <option value="คณะพยาบาลศาสตร์">คณะพยาบาลศาสตร์</option>
+                            <option value="คณะนิติศาสตร์">คณะนิติศาสตร์</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Case Cards List -->
+                <div id="caseListContainer" class="space-y-4">
+                    <!-- Dynamic case cards will be rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: FACULTY ADMIN DASHBOARD -->
+        <div id="section-admin" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Stat Cards -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 font-semibold">เคสทั้งหมด</span>
+                        <span class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-folder-open"></i>
+                        </span>
+                    </div>
+                    <div id="statTotalCases" class="text-4xl font-extrabold text-slate-800 mt-2 font-heading">3</div>
+                    <span class="text-xs text-emerald-600 font-semibold mt-1 inline-block">AI จำแนกถูกต้องแล้ว 100%</span>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 font-semibold">เคสเร่งด่วนมาก</span>
+                        <span class="w-10 h-10 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </span>
+                    </div>
+                    <div id="statUrgentCases" class="text-4xl font-extrabold text-rose-600 mt-2 font-heading">1</div>
+                    <span class="text-xs text-rose-600 font-semibold mt-1 inline-block">ต้องการการตอบสนองภายใน 24 ชม.</span>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 font-semibold">คณะที่รับเรื่องมากสุด</span>
+                        <span class="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-graduation-cap"></i>
+                        </span>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-800 mt-2 font-heading">วิศวกรรมศาสตร์</div>
+                    <span class="text-xs text-slate-500 mt-1 inline-block">ตามด้วย คณะเกษตรศาสตร์</span>
+                </div>
+            </div>
+
+            <!-- Admin Case Routing Table -->
+            <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-200 overflow-x-auto">
+                <h3 class="text-xl font-bold font-heading text-slate-800 mb-4">ตารางจัดการส่งต่อเรื่องและตรวจสอบ AI Routing</h3>
+                <table class="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 text-sm font-bold border-b border-slate-200">
+                            <th class="p-3 rounded-l-xl">รหัสเรื่อง</th>
+                            <th class="p-3">ผู้แจ้ง/เบอร์โทร</th>
+                            <th class="p-3">รายละเอียดปัญหา</th>
+                            <th class="p-3">คณะที่ AI วิเคราะห์</th>
+                            <th class="p-3">ความเร่งด่วน</th>
+                            <th class="p-3">สถานะ</th>
+                            <th class="p-3 rounded-r-xl">การดำเนินการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminTableBody">
+                        <!-- Dynamic admin rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-slate-900 text-slate-400 py-8 border-t border-slate-800 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center space-y-3">
+            <p class="font-semibold text-slate-300">ระบบจำแนกและส่งต่อปัญหาชุมชนสู่คณะวิชาด้วย AI (AI Smart Dispatch)</p>
+            <p class="text-xs text-slate-500">ออกแบบเพื่อสนับสนุนการทำงานของมหาวิทยาลัยและหน่วยงานท้องถิ่น รองรับผู้สูงอายุและประชาชนทุกกลุ่ม</p>
+            <div class="flex justify-center gap-4 text-sm pt-2">
+                <span class="inline-flex items-center gap-1 text-emerald-400"><i class="fa-solid fa-circle-check"></i> ขับเคลื่อนด้วย Gemini API</span>
+                <span>|</span>
+                <span class="inline-flex items-center gap-1 text-amber-400"><i class="fa-solid fa-eye"></i> รองรับการเข้าถึง Accessibility</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // API Configuration (Gemini API key is provided automatically at runtime)
+        const GEMINI_API_KEY = "";
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+
+        // App State
+        let currentImageBase64 = null;
+        let isRecording = false;
+        let recognition = null;
+        let casesList = [
+            {
+                id: "REQ-2026-001",
+                reporter: "คุณยายสมศรี (หมู่ 3)",
+                phone: "089-123-4567",
+                problem: "ท่อน้ำประปาใหญ่หน้าบ้านแตก น้ำไหลท่วมถนนเข้าบ้าน ตาเดินลำบากกลัวล้ม",
+                faculty: "คณะวิศวกรรมศาสตร์",
+                department: "สาขาวิศวกรรมโยธาและสิ่งแวดล้อม",
+                urgency: "ด่วนมาก",
+                reasoning: "เป็นปัญหาโครงสร้างพื้นฐานท่อส่งน้ำชำรุดเสียหาย ต้องใช้วิศวกรโยธาในการซ่อมแซม",
+                status: "คณะรับเรื่องแล้ว",
+                date: "19 ก.ย. 2026"
+            },
+            {
+                id: "REQ-2026-002",
+                reporter: "ตาบุญมี (หมู่ 5)",
+                phone: "081-987-6543",
+                problem: "ข้าวในไร่ใบเหลืองแห้งเป็นจุดสีดำ ปลูกเท่าไหร่ก็ตายอยากให้ผู้เชี่ยวชาญมาตรวจดินและพืช",
+                faculty: "คณะเกษตรศาสตร์",
+                department: "สาขาโรคพืชและการจัดการดิน",
+                urgency: "ปานกลาง",
+                reasoning: "เป็นโรคพืชและปัญหาธาตุอาหารในดินที่ต้องใช้ความรู้ด้านเกษตรกรรมและวิทยาศาสตร์การเกษตร",
+                status: "กำลังส่งทีมลงพื้นที่",
+                date: "18 ก.ย. 2026"
+            },
+            {
+                id: "REQ-2026-003",
+                reporter: "ยายคำ (หมู่ 1)",
+                phone: "086-555-1234",
+                problem: "คุณตาอายุ 85 ปี มีแผลที่เท้าเรื้อรังจากเบาหวาน ปวดหัวบ่อย อยากให้มีทีมหมอหรือพยาบาลมาเยี่ยมบ้าน",
+                faculty: "คณะพยาบาลศาสตร์",
+                department: "สาขาการพยาบาลผู้สูงอายุและชุมชน",
+                urgency: "ด่วนมาก",
+                reasoning: "ผู้สูงอายุมีแผลเรื้อรังเสี่ยงติดเชื้อ ต้องการการดูแลสุขภาพและการทำแผลเฉพาะทาง",
+                status: "เสร็จสิ้นแล้ว",
+                date: "15 ก.ย. 2026"
+            }
+        ];
+
+        let pendingAnalysis = null;
+
+        // Initialize Speech Recognition if available
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'th-TH';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                const textarea = document.getElementById('problemDescription');
+                textarea.value = (textarea.value ? textarea.value + " " : "") + text;
+                stopVoiceRecording();
+            };
+
+            recognition.onerror = () => {
+                stopVoiceRecording();
+            };
+
+            recognition.onend = () => {
+                stopVoiceRecording();
+            };
+        }
+
+        function toggleVoiceRecognition() {
+            if (!recognition) {
+                alert("เบราว์เซอร์ของท่านยังไม่รองรับระบบสั่งงานด้วยเสียง กรุณาพิมพ์ข้อความแทน");
+                return;
+            }
+
+            if (isRecording) {
+                recognition.stop();
+                stopVoiceRecording();
+            } else {
+                try {
+                    recognition.start();
+                    isRecording = true;
+                    const voiceBtn = document.getElementById('voiceBtn');
+                    voiceBtn.classList.add('pulse-recording', 'bg-rose-600', 'text-white');
+                    voiceBtn.classList.remove('bg-rose-100', 'text-rose-700');
+                    document.getElementById('voiceBtnText').innerText = "กำลังฟังเสียงท่านอยู่... (พูดได้เลย)";
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        }
+
+        function stopVoiceRecording() {
+            isRecording = false;
+            const voiceBtn = document.getElementById('voiceBtn');
+            if (voiceBtn) {
+                voiceBtn.classList.remove('pulse-recording', 'bg-rose-600', 'text-white');
+                voiceBtn.classList.add('bg-rose-100', 'text-rose-700');
+                document.getElementById('voiceBtnText').innerText = "กดเพื่อพูด (เสียง)";
+            }
+        }
+
+        function setExampleText(text) {
+            document.getElementById('problemDescription').value = text;
+        }
+
+        function toggleTextSize() {
+            document.body.classList.toggle('text-large');
+            const isLarge = document.body.classList.contains('text-large');
+            document.getElementById('textSizeLabel').innerText = isLarge ? "ขนาดปกติ" : "ขยายตัวหนังสือ";
+        }
+
+        function toggleContrast() {
+            document.body.classList.toggle('high-contrast');
+        }
+
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    currentImageBase64 = e.target.result.split(',')[1];
+                    document.getElementById('imagePreview').src = e.target.result;
+                    document.getElementById('imagePreviewContainer').classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeImage() {
+            currentImageBase64 = null;
+            document.getElementById('imageInput').value = "";
+            document.getElementById('imagePreviewContainer').classList.add('hidden');
+        }
+
+        async function handleAnalyzeIssue(event) {
+            event.preventDefault();
+            const description = document.getElementById('problemDescription').value.trim();
+            if (!description) {
+                alert("กรุณากรอกหรือพูดระบุรายละเอียดปัญหาของท่านก่อน");
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-2xl"></i> <span>กำลังวิเคราะห์และคัดเลือกคณะโดย AI...</span>`;
+
+            // Prepare prompt system instruction
+            const systemPrompt = `คุณคือ AI ผู้ช่วยจำแนกปัญหาและส่งต่อเรื่องร้องเรียนจากผู้สูงอายุและประชาชนทั่วไปไปยังคณะวิชาในมหาวิทยาลัยที่เหมาะสมที่สุด
+หน้าที่ของคุณคืออ่านปัญหาที่ระบุ และเลือกคณะวิชาที่รับผิดชอบโดยตรงจากรายการนี้:
+1. คณะวิศวกรรมศาสตร์ (ปัญหาท่อน้ำแตก, โครงสร้างอาคาร, ไฟฟ้า, ถนน, สิ่งก่อสร้าง, เครื่องจักร)
+2. คณะเกษตรศาสตร์ (ปัญหาพืชโรคแมลง, ดินเสีย, สัตว์เลี้ยงในฟาร์ม, การปลูกพืช)
+3. คณะพยาบาลศาสตร์ (ปัญหาผู้ป่วยเรื้อรัง, ผู้สูงอายุมีแผล, การทำแผล, สุขภาพกายปฐมภูมิ)
+4. คณะสาธารณสุขศาสตร์ (ปัญหาสภาพแวดล้อมขยะ, ยุงลาย, โรคระบาดในชุมชน, สุขอนามัย)
+5. คณะนิติศาสตร์ (ปัญหาข้อพิพาทที่ดิน, สัญญาไม่เป็นธรรม, กฎหมายชุมชน, การโดนโกง)
+6. คณะเทคโนโลยีสารสนเทศ (ปัญหาแอปพลิเคชัน, มิจฉาชีพออนไลน์, อินเทอร์เน็ต)
+7. คณะวิทยาศาสตร์ (ปัญหาคุณภาพน้ำเสีย, สารเคมีตกค้าง)
+8. คณะมนุษยศาสตร์และสังคมศาสตร์ (ปัญหาความเครียด, สุขภาพจิต, การดูแลสังคม)
+
+ตอบกลับเป็น JSON Schema เท่านั้น:
+{
+  "primaryFaculty": "ชื่อคณะวิชาหลัก",
+  "department": "สาขาวิชาหรือหน่วยงานย่อยที่เกี่ยวข้อง",
+  "secondaryFaculty": "คณะหรือสำนักเสริม (ถ้ามี)",
+  "urgency": "ด่วนมาก" หรือ "ปานกลาง" หรือ "ปกติ",
+  "summary": "สรุปปัญหาแบบสั้นเข้าใจง่าย 1 ประโยค",
+  "reasoning": "อธิบายเหตุผลด้วยภาษาที่ผู้สูงอายุอ่านเข้าใจง่ายว่าทำไมถึงต้องเป็นคณะนี้"
+}`;
+
+            try {
+                let apiPayload = {
+                    contents: [
+                        {
+                            role: "user",
+                            parts: []
+                        }
+                    ],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                primaryFaculty: { type: "STRING" },
+                                department: { type: "STRING" },
+                                secondaryFaculty: { type: "STRING" },
+                                urgency: { type: "STRING" },
+                                summary: { type: "STRING" },
+                                reasoning: { type: "STRING" }
+                            },
+                            required: ["primaryFaculty", "department", "urgency", "summary", "reasoning"]
+                        }
+                    },
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    }
+                };
+
+                let userParts = [{ text: `ข้อความปัญหาจากประชาชน: "${description}"` }];
+
+                if (currentImageBase64) {
+                    userParts.push({
+                        inlineData: {
+                            mimeType: "image/png",
+                            data: currentImageBase64
+                        }
+                    });
+                }
+
+                apiPayload.contents[0].parts = userParts;
+
+                const response = await fetch(GEMINI_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(apiPayload)
+                });
+
+                if (!response.ok) {
+                    throw new Error("API call failed");
+                }
+
+                const result = await response.json();
+                const jsonText = result.candidates[0].content.parts[0].text;
+                const parsed = JSON.parse(jsonText);
+
+                displayAnalysisResult(parsed);
+
+            } catch (err) {
+                console.warn("Using offline fallback classification engine due to API error or missing key:", err);
+                // Smart Fallback Rule-based Classifier for Demonstration
+                const fallbackResult = simulateAIClassification(description);
+                displayAnalysisResult(fallbackResult);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-2xl"></i> <span>ให้ AI วิเคราะห์เลือกคณะให้ฉัน</span>`;
+            }
+        }
+
+        function simulateAIClassification(text) {
+            text = text.toLowerCase();
+            if (text.includes('ท่อ') || text.includes('น้ำแตก') || text.includes('ถนน') || text.includes('ไฟฟ้า') || text.includes('สร้าง')) {
+                return {
+                    primaryFaculty: "คณะวิศวกรรมศาสตร์",
+                    department: "สาขาวิชาวิศวกรรมโยธาและสิ่งแวดล้อม",
+                    secondaryFaculty: "สำนักบริการวิชาการแก่สังคม",
+                    urgency: "ด่วนมาก",
+                    summary: "ปัญหาโครงสร้างพื้นฐานท่อน้ำชำรุดเสียหายกระทบการเดินทาง",
+                    reasoning: "เนื่องจากปัญหานี้เกี่ยวข้องกับวิศวกรรมโยธาและระบบสาธารณูปโภค คณะวิศวกรรมศาสตร์มีเครื่องมือและผู้เชี่ยวชาญตรงที่สุด"
+                };
+            } else if (text.includes('ข้าว') || text.includes('พืช') || text.includes('ดิน') || text.includes('ไร่') || text.includes('ใบเหลือง') || text.includes('ปลา')) {
+                return {
+                    primaryFaculty: "คณะเกษตรศาสตร์",
+                    department: "สาขาวิชาพืชศาสตร์และการจัดการทรัพยากรเกษตร",
+                    secondaryFaculty: "คณะวิทยาศาสตร์",
+                    urgency: "ปานกลาง",
+                    summary: "ปัญหาศัตรูพืชและโรคพืชระบาดในพื้นที่ทำการเกษตร",
+                    reasoning: "ปัญหาพืชผลเสียหายต้องการผู้เชี่ยวชาญด้านโรคพืชและการปรับปรุงดินเพื่อเข้าช่วยฟื้นฟูผลผลิต"
+                };
+            } else if (text.includes('แผล') || text.includes('เบาหวาน') || text.includes('หมอ') || text.includes('พยาบาล') || text.includes('ปวด') || text.includes('ป่วย')) {
+                return {
+                    primaryFaculty: "คณะพยาบาลศาสตร์",
+                    department: "สาขาการพยาบาลอนามัยชุมชนและผู้สูงอายุ",
+                    secondaryFaculty: "คณะสาธารณสุขศาสตร์",
+                    urgency: "ด่วนมาก",
+                    summary: "ผู้สูงอายุมีอาการป่วยหรือแผลเรื้อรังต้องการการตรวจเยี่ยม home care",
+                    reasoning: "อาการป่วยเรื้อรังและแผลติดเชื้อในผู้สูงอายุจำเป็นต้องได้รับการประเมินและทำแผลโดยคณาจารย์และพยาบาลวิชาชีพ"
+                };
+            } else if (text.includes('ที่ดิน') || text.includes('โกง') || text.includes('รั้ว') || text.includes('กฎหมาย') || text.includes('ทนาย')) {
+                return {
+                    primaryFaculty: "คณะนิติศาสตร์",
+                    department: "ศูนย์ให้คำปรึกษากฎหมายประชาชน",
+                    secondaryFaculty: "คณะมนุษยศาสตร์และสังคมศาสตร์",
+                    urgency: "ปกติ",
+                    summary: "ขอคำปรึกษาข้อพิพาทสิทธิที่ดินและกฎหมายแพ่ง",
+                    reasoning: "เป็นปัญหาข้อพิพาทสิทธิ์ตามกฎหมาย ซึ่งศูนย์นิติธรรมและคณาจารย์นิติศาสตร์สามารถให้คำปรึกษาฟรีได้"
+                };
+            } else {
+                return {
+                    primaryFaculty: "คณะสาธารณสุขศาสตร์",
+                    department: "ศูนย์ส่งเสริมอนามัยและสิ่งแวดล้อมชุมชน",
+                    secondaryFaculty: "สำนักบริการวิชาการ",
+                    urgency: "ปานกลาง",
+                    summary: "ปัญหาความเดือดร้อนทั่วไปในชุมชน",
+                    reasoning: "ปัญหาดังกล่าวครอบคลุมสุขภาวะและความเป็นอยู่ของชุมชน คณะสาธารณสุขศาสตร์จะประสานงานลงพื้นที่วิเคราะห์ต่อ"
+                };
+            }
+        }
+
+        function displayAnalysisResult(data) {
+            pendingAnalysis = data;
+
+            document.getElementById('resultFaculty').innerText = data.primaryFaculty;
+            document.getElementById('resultDepartment').innerText = data.department;
+            document.getElementById('resultSecondary').innerText = data.secondaryFaculty || "ไม่มี";
+            document.getElementById('resultSummary').innerText = data.summary;
+            document.getElementById('resultReasoning').innerText = data.reasoning;
+
+            const urgencyEl = document.getElementById('resultUrgency');
+            if (data.urgency.includes('ด่วนมาก')) {
+                urgencyEl.className = "px-4 py-1.5 bg-rose-600 text-white font-bold rounded-2xl text-lg mt-1 inline-block shadow-sm";
+                urgencyEl.innerText = "🔴 ด่วนมาก";
+            } else if (data.urgency.includes('ปานกลาง')) {
+                urgencyEl.className = "px-4 py-1.5 bg-amber-500 text-white font-bold rounded-2xl text-lg mt-1 inline-block shadow-sm";
+                urgencyEl.innerText = "🟡 ปานกลาง";
+            } else {
+                urgencyEl.className = "px-4 py-1.5 bg-emerald-600 text-white font-bold rounded-2xl text-lg mt-1 inline-block shadow-sm";
+                urgencyEl.innerText = "🟢 ปกติ";
+            }
+
+            const resultContainer = document.getElementById('analysisResult');
+            resultContainer.classList.remove('hidden');
+            resultContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function speakAIResult() {
+            if (!pendingAnalysis) return;
+            const textToSpeak = `AI ได้วิเคราะห์และจำแนกปัญหาของท่านเรียบร้อยแล้ว แนะนำให้ส่งเรื่องไปที่ ${pendingAnalysis.primaryFaculty} ${pendingAnalysis.department} เนื่องจาก ${pendingAnalysis.reasoning}`;
+            
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                utterance.lang = 'th-TH';
+                utterance.rate = 0.9; // Slightly slower for seniors
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert(textToSpeak);
+            }
+        }
+
+        function showManualOverride() {
+            document.getElementById('overrideSection').classList.toggle('hidden');
+        }
+
+        function applyManualOverride() {
+            const selected = document.getElementById('overrideFacultySelect').value;
+            if (pendingAnalysis) {
+                pendingAnalysis.primaryFaculty = selected;
+                pendingAnalysis.reasoning = `(ผู้ใช้ระบุเปลี่ยนคณะด้วยตนเองเป็น ${selected})`;
+                document.getElementById('resultFaculty').innerText = selected;
+                document.getElementById('resultReasoning').innerText = pendingAnalysis.reasoning;
+                document.getElementById('overrideSection').classList.add('hidden');
+            }
+        }
+
+        function confirmDispatch() {
+            if (!pendingAnalysis) return;
+
+            const newCase = {
+                id: `REQ-2026-00${casesList.length + 1}`,
+                reporter: document.getElementById('reporterLocation').value || "ประชาชนในชุมชน",
+                phone: document.getElementById('reporterPhone').value || "ไม่ระบุ",
+                problem: document.getElementById('problemDescription').value,
+                faculty: pendingAnalysis.primaryFaculty,
+                department: pendingAnalysis.department,
+                urgency: pendingAnalysis.urgency,
+                reasoning: pendingAnalysis.reasoning,
+                status: "รอคณะรับเรื่อง",
+                date: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+            };
+
+            casesList.unshift(newCase);
+            updateBadgesAndTables();
+
+            alert(`✅ ส่งเรื่องของท่านไปยัง "${pendingAnalysis.primaryFaculty}" เรียบร้อยแล้ว!\nรหัสติดตามเรื่อง: ${newCase.id}`);
+
+            // Reset Form & Results
+            document.getElementById('issueForm').reset();
+            removeImage();
+            document.getElementById('analysisResult').classList.add('hidden');
+            pendingAnalysis = null;
+
+            // Switch to Case List tab
+            switchTab('cases');
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'border-indigo-600', 'text-indigo-700', 'bg-white', 'shadow-sm');
+                btn.classList.add('border-transparent', 'text-slate-600');
+            });
+
+            document.getElementById('section-report').classList.add('hidden');
+            document.getElementById('section-cases').classList.add('hidden');
+            document.getElementById('section-admin').classList.add('hidden');
+
+            const activeTabBtn = document.getElementById(`tab-${tab}`);
+            activeTabBtn.classList.add('active', 'border-indigo-600', 'text-indigo-700', 'bg-white', 'shadow-sm');
+
+            document.getElementById(`section-${tab}`).classList.remove('hidden');
+
+            if (tab === 'cases') renderCaseList();
+            if (tab === 'admin') renderAdminTable();
+        }
+
+        function renderCaseList() {
+            const filter = document.getElementById('filterFaculty').value;
+            const container = document.getElementById('caseListContainer');
+            container.innerHTML = "";
+
+            const filteredCases = filter === "ALL" 
+                ? casesList 
+                : casesList.filter(c => c.faculty === filter);
+
+            if (filteredCases.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-500 py-8">ไม่พบรายการเรื่องร้องเรียนในหมวดหมู่นี้</p>`;
+                return;
+            }
+
+            filteredCases.forEach(item => {
+                const isUrgent = item.urgency.includes("ด่วนมาก");
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition";
+                card.innerHTML = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono font-bold text-indigo-700 bg-indigo-100 px-3 py-1 rounded-xl text-sm">${item.id}</span>
+                            <span class="text-xs text-slate-500"><i class="fa-regular fa-calendar mr-1"></i>${item.date}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-bold ${isUrgent ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">
+                                ${item.urgency}
+                            </span>
+                            <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">
+                                ${item.status}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="text-lg font-bold text-slate-800">${item.problem}</p>
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
+                            <span><i class="fa-solid fa-graduation-cap text-indigo-600 mr-1"></i>ส่งต่อให้: <strong class="text-indigo-900">${item.faculty}</strong> (${item.department})</span>
+                            <span><i class="fa-solid fa-user text-slate-400 mr-1"></i>ผู้แจ้ง: ${item.reporter} (${item.phone})</span>
+                        </div>
+                        <p class="text-xs text-slate-500 bg-white p-2 rounded-xl border border-slate-200 mt-2">
+                            <strong>เหตุผลที่ AI คัดเลือก:</strong> ${item.reasoning}
+                        </p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('adminTableBody');
+            tbody.innerHTML = "";
+
+            casesList.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-200 hover:bg-slate-50 text-sm";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono font-bold text-indigo-600">${item.id}</td>
+                    <td class="p-3">
+                        <div class="font-bold">${item.reporter}</div>
+                        <div class="text-xs text-slate-500">${item.phone}</div>
+                    </td>
+                    <td class="p-3 max-w-xs truncate" title="${item.problem}">${item.problem}</td>
+                    <td class="p-3">
+                        <span class="font-bold text-indigo-900">${item.faculty}</span>
+                    </td>
+                    <td class="p-3">
+                        <span class="px-2 py-1 text-xs font-bold rounded-lg ${item.urgency.includes('ด่วนมาก') ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}">
+                            ${item.urgency}
+                        </span>
+                    </td>
+                    <td class="p-3">
+                        <span class="px-2.5 py-1 bg-amber-100 text-amber-800 font-semibold rounded-lg text-xs">
+                            ${item.status}
+                        </span>
+                    </td>
+                    <td class="p-3">
+                        <button onclick="reassignCase('${item.id}')" class="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200">
+                            ย้ายคณะ
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('statTotalCases').innerText = casesList.length;
+            document.getElementById('statUrgentCases').innerText = casesList.filter(c => c.urgency.includes("ด่วนมาก")).length;
+        }
+
+        function reassignCase(caseId) {
+            const item = casesList.find(c => c.id === caseId);
+            if (!item) return;
+
+            const newFaculty = prompt(`กรุณาระบุชื่อคณะใหม่ที่ต้องการเปลี่ยนให้เคส ${caseId}:`, item.faculty);
+            if (newFaculty && newFaculty !== item.faculty) {
+                item.faculty = newFaculty;
+                item.reasoning = `(เจ้าหน้าที่ปรับเปลี่ยนคณะเป็น ${newFaculty})`;
+                renderAdminTable();
+                alert(`อัปเดตการส่งต่อเคส ${caseId} ไปยัง ${newFaculty} เรียบร้อยแล้ว`);
+            }
+        }
+
+        function updateBadgesAndTables() {
+            document.getElementById('caseCountBadge').innerText = casesList.length;
+        }
+
+        // Initialize view on load
+        window.onload = function() {
+            updateBadgesAndTables();
+        };
+    </script>
+</body>
+</html>
